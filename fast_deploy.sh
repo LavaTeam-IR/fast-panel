@@ -81,7 +81,7 @@ if [ "$platform_choice" = "1" ]; then
         *) REGION="frankfurt" ;;
     esac
 
-    # Create Service JSON (Connected to your Lvateam-IR/fast-panel repository)
+    # Create Service JSON (Connected to Lvateam-IR/fast-panel repository)
     JSON_DATA=$(cat <<EOF
 {
   "type": "web_service",
@@ -130,13 +130,13 @@ EOF
         echo -e "${YELLOW}[Note] Please wait 2-3 minutes for Render to completely build and launch the server.${NC_PLAIN}"
     else
         echo -e "${RED}[-][Error] Failed to deploy. Server Response:${NC_PLAIN}"
-        echo "$DEPLOY_REQ" | jq .
+        echo "$DEPLOY_REQ"
     fi
 
 elif [ "$platform_choice" = "2" ]; then
     echo ""
     echo -e "${CYAN}--- Railway.app Deployment ---${NC_PLAIN}"
-    echo -e "Please get your API Token from Railway -> Account Settings -> Tokens"
+    echo -e "⚠️ Make sure to use an ACCOUNT TOKEN, not a Project Token."
     read -p "Enter your Railway API Token: " RAILWAY_TOKEN
 
     if [ -z "$RAILWAY_TOKEN" ]; then
@@ -150,7 +150,6 @@ elif [ "$platform_choice" = "2" ]; then
         PROJECT_NAME="fast-project-$RANDOM"
     fi
 
-    # Create Project via GQL directly (This automatically validates the token)
     echo -e "${YELLOW}[*] Validating Token & Creating Project on Railway...${NC_PLAIN}"
     CREATE_PROJ_GQL="{\"query\": \"mutation { projectCreate(input: { name: \\\"$PROJECT_NAME\\\" }) { id } }\"}"
     PROJECT_REQ=$(curl -s -X POST https://backboard.railway.app/graphql \
@@ -158,18 +157,24 @@ elif [ "$platform_choice" = "2" ]; then
       -H "Content-Type: application/json" \
       -d "$CREATE_PROJ_GQL")
 
-    PROJECT_ID=$(echo "$PROJECT_REQ" | jq -r '.data.projectCreate.id')
+    # Safe verification check without crashing jq
+    if echo "$PROJECT_REQ" | grep -q "errors"; then
+        echo -e "${RED}[-][Error] Railway API returned an error:${NC_PLAIN}"
+        echo "$PROJECT_REQ"
+        exit 1
+    fi
 
-    if [ "$PROJECT_ID" = "null" ] || [ -z "$PROJECT_ID" ]; then
-        echo -e "${RED}[-][Error] Invalid Railway Token or failed to create project.${NC_PLAIN}"
-        echo "$PROJECT_REQ" | jq .
+    PROJECT_ID=$(echo "$PROJECT_REQ" | jq -r '.data.projectCreate.id 2>/dev/null')
+
+    if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
+        echo -e "${RED}[-][Error] Failed to parse Project ID. Raw Response:${NC_PLAIN}"
+        echo "$PROJECT_REQ"
         exit 1
     fi
     
     echo -e "${GREEN}[+] Token Verified & Project Created! ID: $PROJECT_ID${NC_PLAIN}"
     echo -e "${YELLOW}[*] Attaching fast-panel repository pipeline...${NC_PLAIN}"
     
-    # Template deployment mutation using your repository path
     DEPLOY_GQL="{\"query\": \"mutation { serviceCreate(input: { projectId: \\\"$PROJECT_ID\\\", source: { repo: \\\"Lvateam-IR/fast-panel\\\" } }) { id } }\"}"
     SERVICE_REQ=$(curl -s -X POST https://backboard.railway.app/graphql \
       -H "Authorization: Bearer $RAILWAY_TOKEN" \
