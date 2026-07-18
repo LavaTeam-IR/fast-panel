@@ -144,28 +144,14 @@ elif [ "$platform_choice" = "2" ]; then
         exit 1
     fi
 
-    # Validate token using Graphql
-    echo -e "${YELLOW}[*] Validating API Token...${NC_PLAIN}"
-    VALIDATE_GQL='{"query": "query { me { id name } }"}'
-    VALIDATION=$(curl -s -X POST https://backboard.railway.app/graphql \
-      -H "Authorization: Bearer $RAILWAY_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "$VALIDATE_GQL")
-
-    if echo "$VALIDATION" | grep -q "name"; then
-        echo -e "${GREEN}[+] Token is valid! Account verified.${NC_PLAIN}"
-    else
-        echo -e "${RED}[-][Error] Invalid Railway Token. Please verify.${NC_PLAIN}"
-        exit 1
-    fi
-
     echo ""
     read -p "Enter unique Project Name (e.g., fastpanel123): " PROJECT_NAME
     if [ -z "$PROJECT_NAME" ]; then
         PROJECT_NAME="fast-project-$RANDOM"
     fi
 
-    # Create Project via GQL
+    # Create Project via GQL directly (This automatically validates the token)
+    echo -e "${YELLOW}[*] Validating Token & Creating Project on Railway...${NC_PLAIN}"
     CREATE_PROJ_GQL="{\"query\": \"mutation { projectCreate(input: { name: \\\"$PROJECT_NAME\\\" }) { id } }\"}"
     PROJECT_REQ=$(curl -s -X POST https://backboard.railway.app/graphql \
       -H "Authorization: Bearer $RAILWAY_TOKEN" \
@@ -175,12 +161,12 @@ elif [ "$platform_choice" = "2" ]; then
     PROJECT_ID=$(echo "$PROJECT_REQ" | jq -r '.data.projectCreate.id')
 
     if [ "$PROJECT_ID" = "null" ] || [ -z "$PROJECT_ID" ]; then
-        echo -e "${RED}[-][Error] Failed to create project on Railway.${NC_PLAIN}"
+        echo -e "${RED}[-][Error] Invalid Railway Token or failed to create project.${NC_PLAIN}"
         echo "$PROJECT_REQ" | jq .
         exit 1
     fi
     
-    echo -e "${GREEN}[+] Project created successfully! ID: $PROJECT_ID${NC_PLAIN}"
+    echo -e "${GREEN}[+] Token Verified & Project Created! ID: $PROJECT_ID${NC_PLAIN}"
     echo -e "${YELLOW}[*] Attaching fast-panel repository pipeline...${NC_PLAIN}"
     
     # Template deployment mutation using your repository path
@@ -204,4 +190,3 @@ else
     echo -e "${RED}Invalid Selection! Exiting...${NC_PLAIN}"
     exit 1
 fi
-
